@@ -1,0 +1,93 @@
+# Pull data from GBIF
+
+Load packages
+
+```{r}
+#| include: false
+library(tidyverse)
+```
+## Download data from GBIF
+
+```{r}
+# Show all keys
+rgbif::name_lookup()
+# Pull key for a species of archaea
+thermpen = rgbif::name_backbone(name = "Thermofilum pendens")$usageKey
+
+# Download occurances
+rgbif::occ_download(rgbif::pred("taxonKey", 2))
+
+# Check status of download
+rgbif::occ_download_wait('0102361-230224095556074')
+
+# Retrieve data
+d <- rgbif::occ_download_get('0102361-230224095556074') %>%
+    rgbif::occ_download_import()
+
+#Citation Info:  
+#  Please always cite the download DOI when using this data.
+#  https://www.gbif.org/citation-guidelines
+#  DOI: 10.15468/dl.jcpag4
+```
+## Interrogate data
+
+```{r}
+d %>% 
+  distinct(eventRemarks)
+
+d %>% 
+  distinct(scientificName)
+
+hist(d$year)
+
+d %>% 
+  distinct(mediaType)
+
+d %>% 
+  distinct(protocol)
+
+d %>% 
+  distinct(depth)
+
+d %>% 
+  distinct(issue)
+
+hist(d$relativeOrganismQuantity)
+```
+
+Take only from this project: https://www.gbif.org/dataset/110155d2-f474-4012-9209-eebf20fd9be1
+
+```{r}
+arc = d %>% 
+  dplyr::filter(datasetKey == "110155d2-f474-4012-9209-eebf20fd9be1")
+
+# Find which variable is associated with the same sample
+test = arc %>%  
+  tidyr::unite(col = "long_lat",
+               decimalLongitude, decimalLatitude,sep = "_",remove = F) %>% 
+  # split identifier into three parts
+  tidyr::separate(col = "identifier",
+                  into = c("soilCoreID", "typeID", "OTUID"), sep = ":", remove = F)
+
+# Check that soilCoreID is all the same at each location
+test2 = split(test, f = test$long_lat)
+all(purrr::map_int(test2, ~length(unique(.x$soilCoreID))) == 1)
+
+# Select columns of interest
+
+cols = c("long_lat", "decimalLongitude", "decimalLatitude", "kingdom", "phylum", "class", "order", "family", "genus", "species", "genericName", "eventDate", "identifier", "occurrenceID", "organismQuantityType", "organismQuantity", "relativeOrganismQuantity", "samplingProtocol", "soilCoreID", "typeID", "OTUID")
+
+df = test %>% 
+  # taket key columns
+  dplyr::select(dplyr::all_of(cols))
+
+# Count number of unique OTUs in each sample
+final = df %>% 
+  dplyr::count(long_lat, name = "n_OTUs")
+
+# Save to file
+readr::write_csv(final, here::here("results/global_soil_microbiomes/archaea.csv"))
+```
+
+
+
